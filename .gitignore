@@ -1,0 +1,31 @@
+# Secrets - only the template is committed
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+.coverage
+htmlcov/
+
+# Generated on every test run: reports, logs, screenshots, traces, videos
+test-results/
+reports/
+playwright-report/
+screenshots/
+videos/
+*.log
+
+# IDE / OS / local machine files
+.vscode/
+.idea/
+*.code-workspace
+.DS_Store
+Thumbs.db
+desktop.ini
