@@ -17,6 +17,9 @@ from framework.pages.login_page import AuthenticationError, LoginPage
 
 logger = logging.getLogger(__name__)
 
+NAVIGATION_TIMEOUT_MS = 60_000
+"""The test server's own JS bundle has taken 2-10 s and more to download, so the 30 s default is too tight."""
+
 
 @pytest.fixture(scope="session")
 def base_url(pytestconfig: pytest.Config) -> str:
@@ -58,12 +61,14 @@ def authenticated_page(
     storage = _signed_in_storage.get(browser_name)
     if storage is None:
         page = new_context().new_page()
+        page.set_default_navigation_timeout(NAVIGATION_TIMEOUT_MS)
         login_page = LoginPage(page)
         login_page.open()
         login_page.login(credentials)
         _signed_in_storage[browser_name] = page.context.storage_state()
         return page
     page = new_context(storage_state=storage).new_page()
+    page.set_default_navigation_timeout(NAVIGATION_TIMEOUT_MS)
     logger.info("Reuse the signed-in session; open %s", LoginPage.DASHBOARD_PATH)
     page.goto(LoginPage.DASHBOARD_PATH)
     return page

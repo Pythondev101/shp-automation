@@ -22,6 +22,7 @@ COLUMN_HEADERS = (
     "File",
     "Priority",
     "Status",
+    "Position",
     "Chat",
     "Action",
     "Date & Time",

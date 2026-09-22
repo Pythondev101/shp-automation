@@ -38,8 +38,9 @@ class HelpCenterPage(BasePage):
         self.page.set_viewport_size(self.FULL_TABLE_VIEWPORT)
 
     def open_from_sidebar(self) -> None:
-        """Open the page the way a user does: the "Help Center" sidebar entry."""
-        self.click(self.locators.sidebar_menu_entry, "'Help Center' sidebar menu")
+        """Open the page the way a user does: the "Help Center" sidebar entry; wait for its case list."""
+        with self.page.expect_response(self._is_case_list_response):
+            self.click(self.locators.sidebar_menu_entry, "'Help Center' sidebar menu")
 
     # Raise New Case
 
