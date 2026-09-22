@@ -102,7 +102,7 @@ jobs:
       - name: Install Playwright browser and Linux dependencies
         run: python -m playwright install --with-deps ${{ matrix.browser }}
 
-      # The two Training Video playback tests run in the video_playback job instead:
+      # The two Training Video playback tests are not run in CI (run them locally):
       # YouTube answers GitHub-hosted runner IPs with "Sign in to confirm you're not a bot".
       - name: Run the tests that change no data
         env:
@@ -121,60 +121,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: read-only-${{ matrix.browser }}
-          path: |
-            reports/
-            test-results/
-          if-no-files-found: ignore
-          retention-days: 14
-
-  video_playback:
-    name: Training Video playback (${{ matrix.browser }}, self-hosted)
-    # YouTube serves the embedded videos only to a network it does not flag as a bot,
-    # so these two tests need a self-hosted runner (repo Settings -> Actions -> Runners).
-    # Read-only: they may run beside the read_only jobs.
-    needs: setup
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      max-parallel: 1
-      matrix:
-        browser: ${{ fromJSON(needs.setup.outputs.browsers) }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
-
-      - name: Install Playwright browser
-        run: python -m playwright install ${{ matrix.browser }}
-
-      - name: Run the Training Video playback tests
-        env:
-          SHP_BASE_URL: ${{ secrets.SHP_BASE_URL }}
-          SHP_USERNAME: ${{ secrets.SHP_USERNAME }}
-          SHP_PASSWORD: ${{ secrets.SHP_PASSWORD }}
-        run: >
-          python -m pytest
-          tests/ui/test_training_videos.py::test_selected_video_starts_playing
-          tests/ui/test_training_videos.py::test_only_one_video_plays_at_a_time
-          --browser ${{ matrix.browser }}
-          --video retain-on-failure
-
-      - name: Upload reports and failure evidence
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: video-playback-${{ matrix.browser }}
           path: |
             reports/
             test-results/
@@ -230,7 +176,7 @@ jobs:
 
   result:
     name: Result
-    needs: [setup, read_only, video_playback, data_writing]
+    needs: [setup, read_only, data_writing]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -239,7 +185,6 @@ jobs:
         env:
           SETUP: ${{ needs.setup.result }}
           READ_ONLY: ${{ needs.read_only.result }}
-          VIDEO_PLAYBACK: ${{ needs.video_playback.result }}
           DATA_WRITING: ${{ needs.data_writing.result }}
         run: |
           {
@@ -247,10 +192,9 @@ jobs:
             echo "|---|---|"
             echo "| Setup and reachability | $SETUP |"
             echo "| Read-only tests | $READ_ONLY |"
-            echo "| Training Video playback (self-hosted) | $VIDEO_PLAYBACK |"
             echo "| Data-writing tests | $DATA_WRITING |"
           } >> "$GITHUB_STEP_SUMMARY"
-          if [ "$SETUP" = "success" ] && [ "$READ_ONLY" = "success" ] && [ "$VIDEO_PLAYBACK" = "success" ] && [ "$DATA_WRITING" = "success" ]; then
+          if [ "$SETUP" = "success" ] && [ "$READ_ONLY" = "success" ] && [ "$DATA_WRITING" = "success" ]; then
             echo "PASS ✅ - every configured test passed and the account state was restored." >> "$GITHUB_STEP_SUMMARY"
             echo "PASS ✅"
           else
