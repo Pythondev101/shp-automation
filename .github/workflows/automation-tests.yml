@@ -133,7 +133,7 @@ jobs:
     # so these two tests need a self-hosted runner (repo Settings -> Actions -> Runners).
     # Read-only: they may run beside the read_only jobs.
     needs: setup
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
