@@ -1,10 +1,11 @@
-"""Listing → Common Listing → Create Listing → Single Listing ("Add New Listing").
+"""Listing → Common Listing → Create Listing → Single Listing → Manual ("Add New Listing").
 
 The page is reached through the sidebar "Listing" → "Common Listing" → "Create Listing" →
-"Single Listing" on the ``authenticated_page`` fixture. No field is ever filled: the validation
-tests submit the empty form, and every API request that is not a GET is aborted (and fails the
-test), so no listing can be saved or sent live even if validation stopped working.
-Multi Listing, image upload, category and policy logic are out of scope.
+"Single Listing" → "Manual" on the ``authenticated_page`` fixture ("Single Listing" only expands
+a sub-menu). No field is ever filled: the validation tests submit the empty form, and every API
+request that is not a GET is aborted (and fails the test), so no listing can be saved or sent
+live even if validation stopped working. Multi Listing, "Generate Listing By AI", image upload,
+category and policy logic are out of scope.
 """
 
 from __future__ import annotations
@@ -45,7 +46,7 @@ def common_listing(authenticated_page: Page) -> CommonListingPage:
 
 @pytest.fixture
 def single_listing(common_listing: CommonListingPage) -> SingleListingPage:
-    """The Add New Listing page, opened through Create Listing → Single Listing, with writes blocked."""
+    """The Add New Listing page, opened through Create Listing → Single Listing → Manual, writes blocked."""
     page = SingleListingPage(common_listing.page)
     page.block_write_requests()
     common_listing.open_create_listing_menu()
@@ -63,6 +64,17 @@ def test_create_listing_menu_offers_single_and_multi_listing(common_listing: Com
     expect(locators.create_listing_menu).to_be_visible()
     expect(locators.single_listing_option).to_be_visible()
     expect(locators.multi_listing_option).to_be_visible()
+
+
+@pytest.mark.smoke
+def test_single_listing_offers_manual_and_ai_options(common_listing: CommonListingPage) -> None:
+    locators = common_listing.locators
+    common_listing.open_create_listing_menu()
+    expect(locators.single_listing_option).to_be_visible()
+    common_listing.expand_single_listing()
+    expect(locators.single_listing_submenu).to_be_visible()
+    expect(locators.manual_option).to_be_visible()
+    expect(locators.generate_by_ai_option).to_be_visible()
 
 
 @pytest.mark.smoke

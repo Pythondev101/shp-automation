@@ -45,6 +45,11 @@ COLUMN_HEADERS = (
 """Every named column header, in the order the page renders them (after the unnamed first column)."""
 
 
+def _named(name: str) -> re.Pattern[str]:
+    """Match an accessible name that an icon glyph precedes or follows."""
+    return re.compile(rf"^\W*{re.escape(name)}\W*$")
+
+
 class CommonListingLocators:
     """Every element the Common Listing tests use. Locators are lazy: nothing is looked up until used."""
 
@@ -67,10 +72,20 @@ class CommonListingLocators:
         self.help_button: Locator = self._main.get_by_role("button", name="Help")
         self.create_listing_button: Locator = self._main.get_by_role("button", name="Create Listing", exact=True)
         # Create Listing opens a dropdown list of two buttons (the application calls the second "Multi Listing").
-        self.single_listing_option: Locator = self._main.get_by_role("button", name="Single Listing", exact=True)
+        # "Single Listing" is not a link: it is a sub-menu toggle (``aria-expanded``) that reveals a nested
+        # list with "Manual" and "Generate Listing By AI"; only "Manual" opens the Add New Listing page.
+        # The toggle and the two sub-options carry a Bootstrap icon whose glyph joins their accessible
+        # name, so each name is matched as the word itself surrounded by non-word characters.
+        self.single_listing_option: Locator = self._main.get_by_role("button", name=_named("Single Listing"))
         self.multi_listing_option: Locator = self._main.get_by_role("button", name="Multi Listing", exact=True)
         # The menu's <ul> is not exposed with a list role, so it is the options' nearest list ancestor.
         self.create_listing_menu: Locator = self.single_listing_option.locator("xpath=ancestor::ul[1]")
+        # The nested list is the toggle's following sibling inside the same list item.
+        self.single_listing_submenu: Locator = self.single_listing_option.locator("xpath=following-sibling::ul[1]")
+        self.manual_option: Locator = self.single_listing_submenu.get_by_role("button", name=_named("Manual"))
+        self.generate_by_ai_option: Locator = self.single_listing_submenu.get_by_role(
+            "button", name=_named("Generate Listing By AI")
+        )
 
         # Search / filter section.
         self.upc_number_input: Locator = self._labelled("UPC Number", "input")

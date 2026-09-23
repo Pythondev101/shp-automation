@@ -1,4 +1,4 @@
-"""Locators of the SHP Listing → Common Listing → Create Listing → Single Listing page (``/single-listing/add``).
+"""Locators of the SHP Listing → Common Listing → Create Listing → Single Listing → Manual page (``/single-listing/add``).
 
 Verified against the live page on 2026-09-22. The page is titled "Add New Listing" and holds eight
 sections (ids ``sec-store`` … ``sec-images``) reached through eight section buttons. The form

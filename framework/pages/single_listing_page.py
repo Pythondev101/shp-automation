@@ -1,4 +1,4 @@
-"""Page object of the SHP Listing → Common Listing → Create Listing → Single Listing page."""
+"""Page object of the SHP Listing → Common Listing → Create Listing → Single Listing → Manual page."""
 
 from __future__ import annotations
 
@@ -32,9 +32,13 @@ class SingleListingPage(BasePage):
         """Every non-GET API request the page tried to send after ``block_write_requests()``."""
 
     def open_from_common_listing(self, common_listing: CommonListingPage) -> None:
-        """Choose Create Listing → Single Listing and wait until the form's dropdown options loaded."""
+        """Choose Create Listing → Single Listing → Manual and wait until the form's dropdowns loaded.
+
+        "Single Listing" only expands its sub-menu; "Manual" is the option that opens the form.
+        """
+        common_listing.expand_single_listing()
         with self.page.expect_response(self._is_form_options_response):
-            common_listing.choose_single_listing()
+            common_listing.choose_manual_single_listing()
         self.page.wait_for_url(PAGE_URL)
         logger.info("Set the viewport to %(width)sx%(height)s", self.FORM_VIEWPORT)
         self.page.set_viewport_size(self.FORM_VIEWPORT)

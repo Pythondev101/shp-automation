@@ -51,9 +51,17 @@ class CommonListingPage(BasePage):
     def open_create_listing_menu(self) -> None:
         self.click(self.locators.create_listing_button, "'Create Listing' button")
 
-    def choose_single_listing(self) -> None:
-        """Pick "Single Listing" in the open Create Listing menu; it opens the Add New Listing page."""
+    def expand_single_listing(self) -> None:
+        """Open the "Single Listing" sub-menu; it reveals "Manual" and "Generate Listing By AI".
+
+        "Single Listing" only toggles the sub-menu, it navigates nowhere.
+        """
         self.click(self.locators.single_listing_option, "'Single Listing' Create Listing option")
+        self.locators.manual_option.wait_for()
+
+    def choose_manual_single_listing(self) -> None:
+        """Pick "Manual" in the open Single Listing sub-menu; it opens the Add New Listing page."""
+        self.click(self.locators.manual_option, "'Manual' Single Listing option")
 
     @staticmethod
     def option_labels(select: Locator) -> list[str]:
