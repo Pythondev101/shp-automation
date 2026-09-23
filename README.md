@@ -670,6 +670,164 @@ Manage Order facts observed on 2026-09-15 (one read-only inspection; only the si
 
 **Files (Step 20):** created `framework/locators/manage_order_locators.py`, `framework/pages/manage_order_page.py`, `tests/ui/test_manage_order.py`. Modified: `README.md` (this section only).
 
+## Order Logs → Order Processing tests
+
+`tests/ui/test_order_processing.py` – the Order Processing Logs page, `/order-logs/processing` (page object `OrderProcessingPage`, locators `OrderProcessingLocators`). Run with `pytest tests/ui/test_order_processing.py`. All tests carry `regression`, plus `smoke` (navigation, visibility) or `functional` (no-data, filters), and use `authenticated_page`.
+
+The fixture expands the **"Order Logs"** sidebar menu (only while collapsed), clicks **"Order Processing"**, waits for the table request `GET /api/v1/order-logs/processing` and the URL. No order data is hardcoded; every check holds whether the table is empty (today) or has rows. Not tested: Order Tracking, sorting, order details, edit/update/delete.
+
+| # | Test | Verifies |
+|---|---|---|
+| 1 | `test_order_processing_opens_from_order_logs_menu` | **Navigation:** sub-menu expanded, URL, "Order Processing Logs" heading, Order Processing link is the active one (`aria-current="page"`) |
+| 2 | `test_page_heading_and_breadcrumb_are_visible` | Heading, breadcrumb |
+| 3 | `test_filters_and_controls_are_visible` | Order Status, Date Range, Buyer, Part #, Order ID, Search, Reset, Show entries |
+| 4 | `test_table_is_visible` | Table |
+| 5–13 | `test_table_header_is_visible[<header>]` | S.No, Status, Order ID, Order Status, Total, Buyer, Qty, Part #, Order Date |
+| 14 | `test_table_loads_with_rows_or_empty_state` | **No data:** table request OK; with no data rows "No records found." is shown, with rows it is not |
+| 15 | `test_controls_stay_usable_when_table_is_empty` | Every filter/control enabled, text inputs editable, a Search still answers with a valid state; skips if the table has rows |
+| 16 | `test_order_status_filter` | Selects the first status besides "All", Search, valid state, every row's Order Status matches; **skips while the dropdown offers only "All"** (today) |
+| 17 | `test_date_range_filter` | 1st of this month → today picked in the calendar, field value ends with today (`dd-mm-yyyy`), Search, valid state |
+| 18–20 | `test_text_filter[Buyer / Part # / Order ID]` | Types `automation-test`, Search, valid state, every row's column contains the value |
+| 21 | `test_reset_clears_filters` | Date range + 3 text filters applied, Reset: Order Status "All", every field empty, valid state |
+
+"Valid state" = the table request answered with a 2xx status, heading and table visible, and either rows or the empty-state message.
+
+Order Processing facts observed on 2026-09-22 (read-only inspection; only the sidebar, Search and Reset were clicked):
+- The filter labels are not linked to their controls, so each control is located as the sibling after its `<label>` (Order Status and Order ID are also column headers, so only labels are matched). Date Range is flatpickr: its visible field is named by its placeholder "Choose date range". Show entries is an unnamed select after "Show".
+- Order Status options come from `GET /api/v1/order-logs/options`; today it holds only "All".
+- The empty table has one row with a single cell "No records found.".
+- **Search sends no request when the filters are unchanged**, so every Search in these tests follows a filter change.
+
+**Result:** Chromium, 2026-09-22: **20 passed, 1 skipped** (test 16, no status to select). One fix during the run: test 15 now fills Buyer before Search (see the last fact). Not run on Firefox or WebKit.
+
+**Files:** created `framework/locators/order_processing_locators.py`, `framework/pages/order_processing_page.py`, `tests/ui/test_order_processing.py`. Modified: `README.md` (this section only).
+
+## Order Logs → Order Tracking tests
+
+`tests/ui/test_order_tracking.py` – the Order Tracking Logs page, `/order-logs/tracking` (page object `OrderTrackingPage`, locators `OrderTrackingLocators`). Run with `pytest tests/ui/test_order_tracking.py`. Markers and fixture as for Order Processing.
+
+The page has the same layout as Order Processing, so `OrderTrackingPage` / `OrderTrackingLocators` subclass the Order Processing ones and only redefine the sub-menu link ("Order Tracking"), the heading ("Order Tracking Logs"), the URL, the table request (`GET /api/v1/order-logs/tracking`) and the column list (adds **Tracking #**). The fixture opens the page through **"Order Logs"** → **"Order Tracking"**. No order data is hardcoded. Not tested: Order Processing, sorting, order or tracking details/actions, edit/update/delete.
+
+| # | Test | Verifies |
+|---|---|---|
+| 1 | `test_order_tracking_opens_from_order_logs_menu` | **Navigation:** sub-menu expanded, URL, "Order Tracking Logs" heading, Order Tracking link is the active one (`aria-current="page"`) |
+| 2 | `test_page_heading_and_breadcrumb_are_visible` | Heading, breadcrumb |
+| 3 | `test_filters_and_controls_are_visible` | Order Status, Date Range, Buyer, Part #, Order ID, Search, Reset, Show entries |
+| 4 | `test_table_is_visible` | Table |
+| 5–14 | `test_table_header_is_visible[<header>]` | S.No, Status, Order ID, Order Status, Total, Buyer, Qty, Part #, Tracking #, Order Date |
+| 15 | `test_table_loads_with_rows_or_empty_state` | **No data:** table request OK; with no data rows "No records found." is shown, with rows it is not |
+| 16 | `test_controls_stay_usable_when_table_is_empty` | Every filter/control enabled, text inputs editable, a Search still answers with a valid state; skips if the table has rows |
+| 17 | `test_order_status_filter` | First status besides "All", Search, valid state, every row's Order Status matches; **skips while the dropdown offers only "All"** (today) |
+| 18 | `test_date_range_filter` | 1st of this month → today, Search, valid state |
+| 19–21 | `test_text_filter[Buyer / Part # / Order ID]` | Types `automation-test`, Search, valid state, every row's column contains the value |
+| 22 | `test_reset_clears_filters` | Date range + 3 text filters applied, Reset: Order Status "All", every field empty, valid state |
+
+"Valid state" as for Order Processing. The table is empty today ("No records found.").
+
+**Result:** Chromium, 2026-09-22: **21 passed, 1 skipped** (test 17, no status to select). Not run on Firefox or WebKit.
+
+**Files:** created `framework/locators/order_tracking_locators.py`, `framework/pages/order_tracking_page.py`, `tests/ui/test_order_tracking.py`. Modified: `README.md` (this section only).
+
+## Reports → Order Report tests
+
+`tests/ui/test_reports_order_report.py` – the Reports page, `/reports`, Order Report tab (page object `ReportsPage`, locators `ReportsLocators`). Run with `pytest tests/ui/test_reports_order_report.py`. All tests carry `regression`, plus `smoke` (navigation, visibility) or `functional` (filters), and use `authenticated_page`.
+
+The fixture sets `ReportsPage.FULL_TABLE_VIEWPORT` (2560×900), clicks the sidebar **"Reports"** link, waits for the table request `GET /api/v1/reports/orders` and the URL, then opens the **Order Report** tab (it is the default tab, so it is clicked only while another tab is active). Not tested: Request Report, Download, Help, the Inventory/Listing/Stock Report tabs (only their visibility), sorting, pagination behaviour.
+
+| # | Test | Verifies |
+|---|---|---|
+| 1 | `test_order_report_opens_from_reports_menu` | **Navigation:** URL, "Reports" heading, Order Report tab visible and selected (`active` class) |
+| 2 | `test_page_header_elements_are_visible` | Heading, breadcrumb, Help, Request Report |
+| 3–6 | `test_report_tab_is_visible[<tab>]` | Order Report, Inventory Report, Listing Report, Stock Report |
+| 7 | `test_filters_and_controls_are_visible` | Channel, Order Status, Buyer Name, Part#, Order ID, Search, Reset, Show entries |
+| 8 | `test_table_is_visible` | Table |
+| 9–18 | `test_table_header_is_visible[<header>]` | S.No, Channel, Order Status, By Order Date, By Creation Date, Buyer Name, Part Number, Order Id, Request Date, Download |
+| 19 | `test_footer_and_pagination_are_visible` | "Showing x to y of z entries", Previous, current page number, Next |
+| 20–21 | `test_dropdown_filter[Channel / Order Status]` | Selects the value a visible row holds (else the first option besides the default), Search, valid state, every row's column equals it; skips if the dropdown offers no option |
+| 22–24 | `test_text_filter[Buyer Name / Part# / Order ID]` | Uses the first visible non-empty value of the column (then at least one row must return), else `automation-test`; Search, valid state, every row's column contains it |
+| 25 | `test_combined_filters` | Channel + Order Status from one visible row (else the first option of each), Search, valid state, every row matches both |
+| 26 | `test_reset_clears_filters` | Order Status + 3 text filters (`automation-test`) applied → empty state; Reset: Channel "All Channels", Order Status "All", text fields empty, valid state, the unfiltered row count is back |
+
+"Valid state" = the table request answered with a 2xx status, table visible, and either rows or the empty-state message "No results match your filters".
+
+**Dynamic data:** no row count, request date, order ID, buyer name, channel or download status is hardcoded. Filter values come from the visible rows or the dropdown options (Channel options come from the account's channels); empty cells show "—" and are never used as filter values.
+
+Order Report facts observed on 2026-09-22 (read-only inspection; only the sidebar link, the dropdowns, Search and Reset were used):
+- Filter controls are named by `aria-label` (Channel, Order Status, Entries per page) or placeholder (Buyer Name, Part#, Order ID). Search sends `filter_channel`, `filter_order_status`, `filter_buyer_name`, `filter_part_number`, `filter_order_id`; it sends no request while the filters are unchanged.
+- Report tabs are buttons in a list; the selected one has the `active` class (no `aria-selected`). Help, Request Report and the sidebar link names start with an icon glyph, so they are substring matches. Headers carry a sort glyph (e.g. "Channel⇅"), so they are matched by prefix.
+- **Viewport:** at 1280 px the table folds its last columns into a "+" expand row, which shifts every cell by one column; all 10 columns render at 2560 px.
+- Today the table holds 2 report requests; Buyer Name, Part Number and Order Id are all "—", so the text filters use `automation-test` and check the empty state.
+
+**Result:** Chromium, 2026-09-22: **26/26 passed** (after two fixes during the run: the sidebar link name has an icon glyph, and the wide viewport). Not run on Firefox or WebKit.
+
+**Files:** created `framework/locators/reports_locators.py`, `framework/pages/reports_page.py`, `tests/ui/test_reports_order_report.py`. Modified: `README.md` (this section only).
+
+## Listing → Common Listing tests
+
+`tests/ui/test_common_listing.py` – the Common Listing page, `/common-listing` (page object `CommonListingPage`, locators `CommonListingLocators`). Run with `pytest tests/ui/test_common_listing.py`. All tests carry `regression`, plus `smoke` (navigation, visibility) or `functional` (filters), and use `authenticated_page`.
+
+The fixture sets `CommonListingPage.FULL_TABLE_VIEWPORT` (2560×900), expands the **"Listing"** sidebar menu (only while collapsed), clicks **"Common Listing"**, waits for the table request `GET /api/v1/common-listing` and the URL. Not tested: Create Listing, Edit, Details, Item Specifics, Images, Item Description, Conditional Description, sorting, pagination, Drafts, Product Images.
+
+| # | Test | Verifies |
+|---|---|---|
+| 1 | `test_common_listing_opens_from_listing_menu` | **Navigation:** Listing sub-menu expanded, URL, "Common Listing" heading, Common Listing link is the active one (`aria-current="page"`) |
+| 2 | `test_page_header_elements_are_visible` | Heading, breadcrumb, Help, Create Listing |
+| 3 | `test_filters_and_controls_are_visible` | UPC Number, SKU, Product Id, Title, Channel Filter, Status, By Published Date, Search, Reset, Show entries |
+| 4 | `test_table_is_visible` | Table |
+| 5–21 | `test_table_header_is_visible[<header>]` | S.No, Edit, Status, Product Id, Channel Name, Title, UPC, Postal Code, Sub Title, SKU, Quantity, Start Price, Details, Item Specifics, Images, Item Description, Conditional Description |
+| 22–25 | `test_text_filter[UPC Number / SKU / Product Id / Title]` | Uses the first visible non-empty value of the column (then at least one row must return), else `automation-test`; Search, valid state, every row's column contains it |
+| 26–27 | `test_dropdown_filter[Channel Filter / Status]` | Selects the value a visible row holds (else the first option besides the default), Search, valid state, every row's Channel Name / Status equals it; skips if the dropdown offers no option |
+| 28 | `test_published_date_filter` | 1st of this month → today picked in the calendar, field value ends with today (`dd-mm-yyyy`), Search, valid state |
+| 29 | `test_combined_filters` | Channel Filter + Status from one visible row (else the first option of each), Search, valid state, every row matches both |
+| 30 | `test_reset_clears_filters` | All 4 text filters (`automation-test`), both dropdowns and a one-day date range applied → empty state; Reset: every field empty, dropdowns back to "All Channels" / "All", valid state, the unfiltered row count is back |
+
+"Valid state" = the table request answered with a 2xx status, heading and table visible, and either rows or the empty-state message "No products found.".
+
+**Dynamic data:** no row count, UPC, SKU, Product Id, title, channel, status or date is hardcoded. Text values come from the visible rows, dropdown values from the rendered options (Channel options come from `GET /api/v1/common-listing/channels`), dates from today's date. Channel and status are compared case-insensitively.
+
+Common Listing facts observed on 2026-09-22 (read-only inspection; only the sidebar, the filters, Search and Reset were used):
+- The filter labels are unlinked `label` elements, so each control is the sibling after its label. By Published Date is flatpickr (visible field named by its placeholder "Choose date range"). Show entries is an unnamed select after "Show".
+- The table has an **unnamed first column** before S.No, so cells are addressed at header position + 2.
+- Search sends `search_upc`, `search_sku`, `search_product_id`, `search_title`, `channel_id`, `status`, `date_from`, `date_to`; it **sends no request while the filters are unchanged**. Reset clears every field and reloads without filters.
+- The Channel Filter options come from their own request (`GET /api/v1/common-listing/channels`), answered separately from the table rows, so the fixture waits for both.
+- Empty cells show "—"; it is never used as a filter value.
+- The table was empty at first ("No products found."); later on 2026-09-22 it held listings, so the filters then ran against real rows.
+
+**Fix (2026-09-22):** a later run failed `test_text_filter[UPC Number]` and `[SKU]` and skipped `test_dropdown_filter[Channel Filter]`. The text tests typed the "—" placeholder of an empty cell as the filter value, so no row matched. The Channel test read the options before their request answered. `first_value()` now skips "—", and `open_from_sidebar()` also waits for the channels request. After the fix, all 9 filter tests passed with no skip, and the full file passed **30/30 on Chromium in one run** (10 min 11 s).
+
+**Result:** Chromium, 2026-09-22: **30/30 passed** (29 in the full file run; the navigation test errored in setup because `/login` timed out on the slow server, and passed on re-run). The live server was slow (5–40 s per test). Not run on Firefox or WebKit.
+
+**Files:** created `framework/locators/common_listing_locators.py`, `framework/pages/common_listing_page.py`, `tests/ui/test_common_listing.py`. Modified: `README.md` (this section and a change-log row).
+
+### Create Listing → Single Listing
+
+`tests/ui/test_single_listing.py` – the "Add New Listing" page, `/single-listing/add` (page object `SingleListingPage`, locators `SingleListingLocators`). Run with `pytest tests/ui/test_single_listing.py`. All tests carry `regression`, plus `smoke` (navigation, visibility) or `functional` (section buttons, validation), and use `authenticated_page`.
+
+The `single_listing` fixture opens Common Listing, clicks **Create Listing → Single Listing**, waits for `GET /api/v1/single-listing/form-options` (fills the dropdowns) and the URL, then sets a 1280×720 viewport. **No field is ever filled.** As a safety net the fixture aborts every non-GET `/api/` request and records it; the validation tests fail if any was attempted, so no listing can be saved or sent live even if client-side validation broke. Not tested: Multi Listing, a successful Save as Draft / Send to Live, image upload, Add Specification, the description editor's toolbar, category search and policy logic.
+
+| # | Test | Verifies |
+|---|---|---|
+| 1 | `test_create_listing_menu_offers_single_and_multi_listing` | Create Listing opens its menu; "Single Listing" and "Multi Listing" (the application's wording) visible |
+| 2 | `test_single_listing_opens_add_new_listing_page` | **Navigation:** URL `/single-listing/add`, "Add New Listing" heading, breadcrumb |
+| 3 | `test_section_buttons_and_actions_are_visible` | 8 section buttons (Store Setup, Condition, Item Specifics, Selling, Shipping, Product, Description, Images), Save as Draft, Send to Live |
+| 4–11 | `test_section_is_visible[<section>]` | Each section and its heading: eBay Store Setup, Condition, Item Specifics, Selling Details, Shipping & Pricing, Product Details, Description, Product Images |
+| 12–40 | `test_field_is_visible[<section>-<label>]` | 29 labelled fields: label, control, and the red `*` marker present on required fields / absent on optional ones (see below) |
+| 41 | `test_checkboxes_description_and_image_controls_are_visible` | Add Prop 65 Warning, Charge tax on this product, This is a physical product; Add Specification; description "Paragraph format" select and editor; Product Images label with `*`, Select from Library, Upload from Storage |
+| 42–49 | `test_section_button_scrolls_to_its_section[<button>]` | Scrolls to the far end of the form, checks the section heading is off-screen, clicks the button, heading fully in the viewport, URL unchanged |
+| 50–51 | `test_empty_form_is_rejected[Save as Draft / Send to Live]` | Every required field has `is-invalid` and its message "<label> is required." inside its own field; Images shows "Please upload at least one product image."; no optional field is marked; still on `/single-listing/add` with the heading; no write request attempted |
+
+Fields (page order; **required** in bold): Store Setup – **Fulfillment Policy**, **Payment Policy**, **Return Policy**, **eBay Category**; Condition – **Condition**, Condition Description; Item Specifics – **Brand Code**, **Part Number / Product ID**, **Other Part Number**, **Interchange Part Number**, **Brand**, **Warranty**, **UPC**, **EPID**; Selling – **Listing Type**, Private Listing, **Listing Duration**, **Quantity**; Shipping – **Handling Time**, **Start Price**, Item Cost, **Postal Code**, Site; Product – **Title**, Sub Title, **SKU**, UPC, Tags, Video URL; Images – **Product Images**.
+
+Single Listing facts observed on 2026-09-22 (read-only inspection; the empty form was submitted with every write request blocked, and none was sent):
+- Labels are not linked to their controls; a field is the label's parent element, which holds the control and its message. "UPC" is a label in both Item Specifics and Product Details, so fields are scoped to their section (`#sec-store` … `#sec-images`).
+- Section buttons scroll the window so the section sits near the top; the buttons get no active state. The Save as Draft / Send to Live bar stays on screen, so the "scroll to bottom" step targets Upload from Storage.
+- Save as Draft and Send to Live run the **same** client-side validation on the empty form: 21 field messages plus the image message, no toast, no request, no navigation.
+- The Create Listing menu's `<ul>` has no list role, so it is located as the options' nearest `ul`.
+
+**Result:** Chromium, 2026-09-22: first full run 47/51; 4 failed on test code (menu container locator; the scroll-to-bottom target was the always-visible action bar). After the fix the 9 affected tests (menu + 8 section buttons) passed; the 42 others had passed in the full run → **51/51**. The full file was not re-run in one go afterwards. Not run on Firefox or WebKit. No listing was created, saved or sent live.
+
+**Files:** created `framework/locators/single_listing_locators.py`, `framework/pages/single_listing_page.py`, `tests/ui/test_single_listing.py`. Modified: `framework/locators/common_listing_locators.py` (Create Listing menu and its two options), `framework/pages/common_listing_page.py` (`open_create_listing_menu`, `choose_single_listing`), `README.md` (this subsection and a change-log row).
+
 ## E2E tests
 
 `tests/integration/test_e2e_login_to_logout.py` – one happy-path journey, `test_user_journey_from_login_to_logout`, from the login page to sign-out in **one browser session**. Markers: `e2e`, `regression` and `destructive`. `destructive` is needed because the journey creates and deletes data, so CI runs it only in the single Chromium `data_writing` job. Run with `pytest tests/integration/test_e2e_login_to_logout.py` or `pytest -m e2e`. This is the first test in `tests/integration/` (see the growth rule).
@@ -965,5 +1123,7 @@ My Profile functionality is complete (21/21 on Chromium, password restored). Out
 | 2026-09-16 | Step 21 – GitHub and CI/CD readiness: registered the `destructive` and `shared_state` markers and tagged the 19 data-writing test items (3 Manage Channel, 12 Help Center, 3 My Profile, 1 Upgrade Plan – the last 4 also `shared_state`); no test was rewritten, removed or made manual-only. Added the GitHub Actions pipeline `.github/workflows/automation-tests.yml`: automatic on pushes to `development` and `main`, on pull requests to both, and nightly at 01:30 UTC (plus `workflow_dispatch`), with `setup` (install, `--collect-only` configuration check, site reachability, browser scope) → `read_only` per browser (`-m "not destructive"`) → `data_writing` on Chromium (`-m destructive`, after every read-only job) → `result` (PASS/FAIL summary). Workflow-level `concurrency: shp-live-automation` with `cancel-in-progress: false` queues overlapping runs so the live account cannot be corrupted. Secrets `SHP_BASE_URL`, `SHP_USERNAME`, `SHP_PASSWORD` are passed as environment variables only and never printed. Artifacts (`reports/`, `test-results/` – logs, JUnit XML, screenshots, traces, videos) are uploaded per job for 14 days. Extended `.gitignore` (venv/env, egg-info, coverage, playwright-report, screenshots, videos, `*.log`, workspace and OS files) and noted the CI secret names in `.env.example`. Verified: YAML parses; `pytest --collect-only --strict-markers --strict-config` collects 192 items with no warning; `-m destructive` selects 19, `-m "not destructive"` 173, `-m shared_state` 4; every destructive test has a `finally` block or fixture teardown that restores or deletes and fails loudly when it cannot; no credential or local path in any committed file. Nothing was pushed, committed or branched, and no test was executed against the live site. | Created: `.github/workflows/automation-tests.yml`. Modified: `pytest.ini`, `.gitignore`, `.env.example`, `tests/ui/test_manage_channel.py`, `tests/ui/test_help_center.py`, `tests/ui/test_my_profile.py`, `tests/ui/test_upgrade_plan.py`, `README.md` |
 | 2026-09-22 | Fix – Training Video playback in CI: YouTube shows a bot check to GitHub-hosted runner IPs, so the 2 playback tests now run in a new `video_playback` job on a self-hosted runner and are deselected from `read_only`. No test or framework code changed. Verified locally: 5/5 Training Video tests passed. | Modified: `.github/workflows/automation-tests.yml`, `README.md` |
 | 2026-09-22 | CI – removed the `video_playback` job: there is no self-hosted runner, and YouTube's bot check makes the 2 playback tests fail on GitHub-hosted runners. The tests stay in the suite (local runs only) and are still deselected from `read_only`. The Result job no longer waits for it. | Modified: `.github/workflows/automation-tests.yml`, `README.md` |
+| 2026-09-22 | Listing → Common Listing: navigation, visibility (header, 10 filter controls, table, 17 column headers) and filters (4 text, Channel, Status, By Published Date, combined, Reset); dynamic data only. Verified: 30/30 on Chromium (see Listing → Common Listing tests). | Created: `framework/locators/common_listing_locators.py`, `framework/pages/common_listing_page.py`, `tests/ui/test_common_listing.py`. Modified: `README.md` |
+| 2026-09-22 | Listing → Common Listing → Create Listing → Single Listing: menu options, navigation, visibility (8 sections, 29 fields with required markers, checkboxes, editor, image controls, action buttons), 8 section buttons, empty-form validation for Save as Draft and Send to Live (write requests blocked; nothing created). Verified: 51/51 on Chromium (see Create Listing → Single Listing). | Created: `framework/locators/single_listing_locators.py`, `framework/pages/single_listing_page.py`, `tests/ui/test_single_listing.py`. Modified: `framework/locators/common_listing_locators.py`, `framework/pages/common_listing_page.py`, `README.md` |
 | 2026-09-16 | Fix – Help Center cross-browser failures: in a multi-browser run, pytest ran a test of another browser between one browser's Help Center tests. That switch tore down `created_cases`, whose clean-up deleted the shared automation case, but the `_automation_cases` cache kept pointing at it. The priority, status, date range, combined filter, reset and chat tests then failed on Firefox and WebKit. `_automation_cases` now depends on `created_cases`, so both are torn down together and the next test raises a fresh case. Diagnosed from `reports/pytest.log` and failure screenshots. Verified: `tests/ui/test_help_center.py` 81/81 passed on Chromium, Firefox and WebKit in one run (8 min 31 s). Tests of other browsers again ran in the middle of each browser's tests, and every clean-up finished without error. | Modified: `tests/ui/test_help_center.py`, `README.md`. Created: none |
 | 2026-09-11 | Step 4 – Dashboard visibility: inspected the live dashboard DOM after one valid sign-in (read-only, nothing clicked). Added dashboard locators, the `DashboardPage` page object and 3 visibility tests (sidebar branding and menu, header, content sections) using the existing `authenticated_page` fixture. Verified: 3/3 passed on Chromium, Firefox and WebKit; `-m smoke` now selects 9 tests. No application data changed. | Created: `framework/locators/dashboard_locators.py`, `framework/pages/dashboard_page.py`, `tests/ui/test_dashboard.py`. Modified: `README.md` |
