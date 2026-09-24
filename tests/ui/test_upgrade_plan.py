@@ -50,6 +50,10 @@ def test_subscription_summary_is_visible(upgrade_plan: UpgradePlanPage) -> None:
     locators = upgrade_plan.locators
     for label in SUBSCRIPTION_LABELS:
         expect(locators.subscription_item(label)).to_be_visible()
+    # The third item is "Renews on:" or "Active until:" depending on the subscription, so
+    # exactly one of them must be there - which one is never assumed.
+    expect(locators.renewal_item()).to_have_count(1)
+    expect(locators.renewal_item()).to_be_visible()
     expect(locators.manage_auto_pay_button).to_be_visible()
 
 

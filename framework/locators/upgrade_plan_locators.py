@@ -14,8 +14,16 @@ from playwright.sync_api import Locator, Page
 PAGE_HEADING = "Upgrade Plan"
 CURRENT_USAGE_HEADING = "Current Usage"
 
-SUBSCRIPTION_LABELS = ("Subscription:", "Auto-Pay:", "Active until:")
-"""Labels of the subscription summary; each is followed by its (dynamic) value."""
+SUBSCRIPTION_LABELS = ("Subscription:", "Auto-Pay:")
+"""Labels of the subscription summary that are always there; each is followed by its value."""
+
+RENEWAL_LABELS = ("Renews on:", "Active until:")
+"""The third summary item's label, which depends on the subscription itself.
+
+The application renders ``Renews on:`` while the subscription has a renewal date and
+``Active until:`` while it has none, so the label is never assumed - whichever one is
+rendered is the one the tests check.
+"""
 
 USAGE_LABELS = (
     "No of Staff",
@@ -121,6 +129,15 @@ class UpgradePlanLocators:
             self._main.locator("span")
             .filter(has=self._page.get_by_text(label, exact=True))
             .filter(has_text=re.compile(rf"^\s*{re.escape(label)}\s*\S"))
+        )
+
+    def renewal_item(self) -> Locator:
+        """The third summary item - its date together with whichever label the plan state gives it."""
+        pattern = "|".join(re.escape(label) for label in RENEWAL_LABELS)
+        return (
+            self._main.locator("span")
+            .filter(has=self._page.get_by_text(re.compile(rf"^({pattern})$")))
+            .filter(has_text=re.compile(rf"^\s*({pattern})\s*\S"))
         )
 
     def usage_tile_label(self, label: str) -> Locator:
