@@ -70,7 +70,7 @@ class OrderProcessingLocators:
             "xpath=following::select[1]"
         )
         self.table: Locator = self._main.get_by_role("table").filter(
-            has=page.get_by_role("columnheader", name="Order ID", exact=True)
+            has=page.get_by_role("columnheader", name=_header_name("Order ID"))
         )
         self.no_records_message: Locator = self.table.get_by_role("cell", name=NO_RECORDS_MESSAGE, exact=True)
         self.body_rows: Locator = self.table.locator("tbody tr")
@@ -85,7 +85,7 @@ class OrderProcessingLocators:
         return label_element.locator(f"xpath=following-sibling::{tag}[1]")
 
     def column_header(self, name: str) -> Locator:
-        return self.table.get_by_role("columnheader", name=name, exact=True)
+        return self.table.get_by_role("columnheader", name=_header_name(name))
 
     def column_cells(self, header: str) -> Locator:
         """The ``header`` cells of every data row; cells have no name, so the column is addressed by position."""
@@ -94,3 +94,9 @@ class OrderProcessingLocators:
     def calendar_day(self, day: date) -> Locator:
         """A day of the open Date Range calendar, named like "September 14, 2026"."""
         return self._open_calendar.get_by_label(f"{day:%B} {day.day}, {day.year}", exact=True)
+
+
+def _header_name(name: str) -> re.Pattern[str]:
+    """A column header's name. Since 2026-09-25 sortable headers end with a sort glyph ("⇅", or "▼" / "▲"
+    on the sorted column), which is allowed; "Order ID" still does not match "Order ID Extra"."""
+    return re.compile(rf"^{re.escape(name)}\W*$")

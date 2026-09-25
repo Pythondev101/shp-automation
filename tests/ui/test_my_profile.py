@@ -3,10 +3,13 @@
 Visibility tests (``smoke``) only check presence and change nothing.
 
 Functionality tests (``functional``) type into the profile fields and choose dropdown
-options without saving, except for three tests that do save and always put the
-account back: the numeric-only Full Name check, Save Profile (Company Name only) and
-the password change, which changes the password to a temporary one and immediately
-back to the ``.env`` password. Change Email / Phone, their OTPs, Upload Photo and
+options without saving, except for four tests that do save and always put the
+account back: the numeric-only Full Name check, Save Profile (Company Name only),
+Save Profile with every required field, and the password change, which changes the
+password to a temporary one and immediately back to the ``.env`` password. The profile
+saves need every required field of the saved profile to hold a value: the application
+refuses to save an empty required field, so an empty original could not be restored.
+The required-field validation tests send no save at all. Change Email / Phone, their OTPs, Upload Photo and
 Billing are not touched, and no wrong current password is ever submitted. The page
 comes from the ``authenticated_page`` fixture (one sign-in per browser per run).
 """
@@ -23,6 +26,7 @@ from framework.locators.my_profile_locators import (
     PLACEHOLDER_OPTION,
     POSTAL_EXAMPLE_PREFIX,
     PROFILE_SAVED_MESSAGE,
+    REQUIRED_FIELD_MESSAGES,
     SECTION_HEADINGS,
     SHOW_PASSWORD,
 )
@@ -34,6 +38,10 @@ VALID_TEXT = "SHP Automation Test"
 NUMERIC_ONLY_NAME = "12345"
 VALID_DATE_OF_BIRTH = "1990-05-15"  # yyyy-mm-dd, the value format of a native date field
 SAVED_COMPANY_NAME = "SHP Automation Test Company"
+SAVED_ADDRESS_1 = "101 Dummy Test Street"  # made-up address, not real data
+SAVED_ADDRESS_2 = "Dummy Test Town"
+PROTECTED_REQUIRED_FIELDS = ("Username", "Email")
+"""Required fields that cannot be edited here (disabled, or changed only through OTP); their label may add a note."""
 TEMPORARY_PASSWORD = "tester1"  # agreed temporary password (a letter and a digit); still handled as a secret
 MAX_OPTIONS_TRIED = 10
 """How many countries / states are tried to find one the application has states / cities for."""
@@ -50,6 +58,41 @@ def my_profile(authenticated_page: Page) -> MyProfilePage:
 def _another_value(values: list[str], current: str) -> str:
     """The first dropdown value that differs from the one currently selected."""
     return next(value for value in values if value != current)
+
+
+def _valid_profile_values(my_profile: MyProfilePage, original: dict[str, str]) -> dict[str, str]:
+    """Valid values for every required editable field, taken from the live options and differing where possible.
+
+    The country stays the saved one (so its postal format is known). The state is another
+    one of that country with cities; choosing it loads its cities into the form.
+    """
+    locators = my_profile.locators
+    country = original["country_select"] or my_profile.selectable_values(locators.country_select)[0]
+    if country != locators.country_select.input_value():
+        my_profile.select_country(country)
+    cities: list[str] = []
+    candidates = [v for v in my_profile.selectable_values(locators.state_select) if v != original["state_select"]]
+    for state in candidates[:MAX_OPTIONS_TRIED]:
+        cities = my_profile.select_state(state)
+        if cities:
+            break
+    assert cities, f"None of the first {MAX_OPTIONS_TRIED} other states of the saved country has cities"
+    # The City list is exactly the cities the application returned for the chosen state.
+    expect(locators.city_options).to_have_text([PLACEHOLDER_OPTION, *cities])
+    timezone = locators.timezone_select
+    placeholder = locators.pincode_input.get_attribute("placeholder") or ""
+    assert placeholder.startswith(POSTAL_EXAMPLE_PREFIX), "The application shows no postal code example for the country"
+    return {
+        "full_name_input": VALID_TEXT,
+        "company_name_input": SAVED_COMPANY_NAME,
+        "country_select": country,
+        "state_select": state,
+        "city_select": my_profile.selectable_values(locators.city_select)[0],
+        "timezone_select": _another_value(my_profile.selectable_values(timezone), original["timezone_select"]),
+        "pincode_input": placeholder.removeprefix(POSTAL_EXAMPLE_PREFIX),
+        "address_1_input": SAVED_ADDRESS_1,
+        "address_2_input": SAVED_ADDRESS_2,
+    }
 
 
 @pytest.mark.smoke
@@ -243,6 +286,73 @@ def test_save_profile_persists_the_change(my_profile: MyProfilePage) -> None:
             assert restored.get("status") is True, "The original company name could not be restored"
     my_profile.reload()
     expect(company_name).to_have_value(original)
+
+
+@pytest.mark.functional
+def test_required_fields_are_marked(my_profile: MyProfilePage) -> None:
+    my_profile.wait_until_loaded()  # State is marked required only once the country's states are loaded
+    required = my_profile.required_fields()
+    editable = [name for name, control in required.items() if control.is_editable()]
+    protected = {name.split(" (")[0]: control for name, control in required.items() if name not in editable}
+
+    missing = [name for name in REQUIRED_FIELD_MESSAGES if name not in editable]
+    assert not missing, f"Fields expected to be required and editable are not: {missing} (live: {list(required)})"
+    unknown = [name for name in editable if name not in REQUIRED_FIELD_MESSAGES]
+    assert not unknown, f"New required editable fields have no known validation message: {unknown}"
+    for name in PROTECTED_REQUIRED_FIELDS:
+        assert name in protected, f"{name} is not marked as a required read-only field (live: {list(required)})"
+        expect(protected[name]).not_to_have_value("")
+
+
+@pytest.mark.functional
+@pytest.mark.parametrize("field_name", REQUIRED_FIELD_MESSAGES)
+def test_save_profile_rejects_empty_required_field(my_profile: MyProfilePage, field_name: str) -> None:
+    original = my_profile.profile_values()
+    my_profile.fill_profile(_valid_profile_values(my_profile, original))
+    field = my_profile.required_fields()[field_name]
+    if field.evaluate("e => e.tagName") == "SELECT":
+        my_profile.select(field, "", f"{field_name} dropdown")
+    else:
+        my_profile.fill(field, "", f"{field_name} field")
+
+    sent = my_profile.press_save_expecting_validation(REQUIRED_FIELD_MESSAGES[field_name])
+    expect(my_profile.locators.toast(REQUIRED_FIELD_MESSAGES[field_name])).to_be_visible()
+    assert not sent, f"Save Profile sent the form with an empty {field_name}"
+    my_profile.reload()
+    assert my_profile.profile_values() == original, "The profile changed although Save Profile was refused"
+
+
+@pytest.mark.functional
+@pytest.mark.destructive
+@pytest.mark.shared_state
+def test_save_profile_with_all_required_fields_and_restore(my_profile: MyProfilePage) -> None:
+    original = my_profile.profile_values()
+    values = _valid_profile_values(my_profile, original)
+    my_profile.fill_profile(values)
+    assert not my_profile.empty_required_fields(), "A required field is still empty before saving"
+    answer = my_profile.save_profile()
+    try:
+        assert answer.get("status") is True, f"Save Profile failed (server message: {answer.get('message')!r})"
+        expect(my_profile.locators.toast(PROFILE_SAVED_MESSAGE)).to_be_visible()
+        states, cities = my_profile.reload_reading_lists(values["country_select"], values["state_select"])
+        assert my_profile.profile_values() == values, "The saved values did not persist after a reload"
+        # State offers only the saved country's states and City only the saved state's cities,
+        # and the saved state / city are among them.
+        locators = my_profile.locators
+        expect(locators.state_options).to_have_text([PLACEHOLDER_OPTION, *states])
+        expect(locators.city_options).to_have_text([PLACEHOLDER_OPTION, *cities])
+        assert locators.state_select.locator("option:checked").text_content() in states
+        assert locators.city_select.locator("option:checked").text_content() in cities
+    finally:
+        my_profile.reload()
+        if my_profile.profile_values() != original:
+            my_profile.fill_profile(original)
+            restored = my_profile.save_profile()
+            assert restored.get("status") is True, (
+                f"PROFILE NOT RESTORED (server message: {restored.get('message')!r}); original values: {original}"
+            )
+    my_profile.reload()
+    assert my_profile.profile_values() == original, "The profile does not match its original values"
 
 
 @pytest.mark.functional

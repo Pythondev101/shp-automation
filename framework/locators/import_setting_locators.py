@@ -216,4 +216,5 @@ class ImportSettingLocators:
         return self.data_rows.locator(f"td:nth-child({COLUMN_HEADERS.index(column) + 1})")
 
     def column_header(self, name: str) -> Locator:
-        return self.table.get_by_role("columnheader", name=name, exact=True)
+        """A column header; sortable ones (since 2026-09-25) end with a sort glyph such as "⇅", which is allowed."""
+        return self.table.get_by_role("columnheader", name=re.compile(rf"^{re.escape(name)}\W*$"))

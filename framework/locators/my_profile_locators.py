@@ -62,6 +62,25 @@ PLACEHOLDER_OPTION = "Select"
 POSTAL_EXAMPLE_PREFIX = "e.g. "
 """The Pincode placeholder reads ``e.g. <example>`` when the application knows the country's postal format."""
 
+REQUIRED_MARK = "*"
+"""A required field's label ends with a red ``<span class="text-danger"> *</span>``; there is no ``required`` attribute."""
+
+REQUIRED_FIELD_MESSAGES = {
+    "Full Name": "Full name is required.",
+    "Company Name": "Company name is required.",
+    "Country": "Please select a country.",
+    "State": "Please select a state.",
+    "City": "Please select a city.",
+    "Timezone": "Please select a timezone.",
+    "Pincode": "Pincode is required.",
+    "Address 1": "Address 1 is required.",
+    "Address 2": "Address 2 is required.",
+}
+"""Toast Save Profile shows, instead of sending the form, for an empty required editable field.
+
+The fields are checked one at a time, so only the first empty one is reported; no field gets an error style.
+"""
+
 
 class MyProfileLocators:
     """Every element the My Profile tests use. Locators are lazy: nothing is looked up until used."""
@@ -109,6 +128,8 @@ class MyProfileLocators:
         self.description_input: Locator = self._field("Description", "textarea")
         # The name of this button starts with an icon glyph, so it is matched as a substring.
         self.save_profile_button: Locator = self._main.get_by_role("button", name="Save Profile")
+        # Labels carrying the red required mark; the Security card's are excluded by their password controls.
+        self.required_labels: Locator = self._main.locator("label").filter(has=page.locator("span.text-danger"))
 
         # Security. These three fields are the only ones with a placeholder, and
         # "New Password" is a substring of "Confirm New Password", so they are located
@@ -130,6 +151,11 @@ class MyProfileLocators:
     def toast(self, message: str) -> Locator:
         """A toast notification showing ``message``; toasts render outside ``main``."""
         return self._page.get_by_role("status").filter(has_text=message)
+
+    @staticmethod
+    def control_of(label: Locator) -> Locator:
+        """The input, select or textarea that follows ``label`` (same rule as ``_field()``, any kind)."""
+        return label.locator("xpath=following::*[self::input or self::select or self::textarea][1]")
 
     def _field(self, label: str, control: str = "input") -> Locator:
         """The control belonging to the field labelled ``label``.
