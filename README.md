@@ -20,9 +20,11 @@ This file is the single source of truth for the framework. It is updated after e
 |---|---|---|
 | Python | 3.13 (verified) | Language |
 | pytest | 9.1.1 | Test runner, markers, fixtures, logging, JUnit report |
-| playwright | 1.62.0 | Browser automation (Chromium, Firefox, WebKit); built-in HTTP client for API tests |
+| playwright | 1.62.0 | Browser automation (Chromium, Firefox, WebKit) |
 | pytest-playwright | 0.9.0 | Browser/page fixtures, cross-browser runs, screenshots/traces/videos (brings `pytest-base-url`) |
 | python-dotenv | 1.2.3 | Loads the local `.env` file |
+| requests | 2.34.2 | HTTP client of the API tests (`framework/api/`) |
+| pytest-html | 4.2.0 | Optional HTML report (`--html=...`); brings `pytest-metadata` and `Jinja2` |
 
 Other Python versions supported by Playwright should work but are not yet verified.
 
@@ -79,7 +81,7 @@ Generated locally and git-ignored: `.venv/`, `.env`, `test-results/`, `reports/`
 | Folder | Created when |
 |---|---|
 | `framework/pages/`, `framework/locators/`, `tests/ui/` | created in Step 2 (Login page) |
-| `framework/api/` + `tests/api/` | the first API module is automated |
+| `framework/api/` + `tests/api/` | created 2026-11-12 (Login API) |
 | `tests/integration/` | the first cross-layer (UI → API → DB) or E2E flow is automated |
 | `framework/db/` | database access details are provided |
 | `test_data/` | test data outgrows inline `@pytest.mark.parametrize` |
@@ -140,6 +142,9 @@ pytest tests/ui/test_manage_channel.py                  # one module (Manage Cha
 pytest tests/ui/test_my_profile.py                      # one module (My Account → My Profile visibility + functionality; changes and restores the password)
 pytest tests/ui/test_billing.py                         # one module (My Account → Billing visibility)
 pytest tests/ui/test_help_center.py                     # one module (Help Center visibility)
+pytest tests/api                                        # Login API tests (no browser; wrong-password test skipped)
+pytest tests/api --html=reports/api_report.html --self-contained-html   # same, plus an HTML report
+pytest tests/api -m lockout_risk                        # ONLY the wrong-password API test (see Login API tests)
 pytest -m smoke                                         # one category
 pytest -m "regression and not api"                      # marker expressions
 pytest -m "not destructive"                             # everything that writes no data
@@ -1109,6 +1114,37 @@ SMTP Settings facts observed while building these tests on 2026-09-23:
 
 **Files:** created `tests/ui/test_smtp_settings_functional.py`. Modified: `framework/locators/smtp_settings_locators.py` (modal, delete-dialog and row locators; `CREATE_API_PATH`, `RECORD_API_PATH`, the three titles), `framework/pages/smtp_settings_page.py` (modal, save, edit, delete and reload actions; create-request recording), `framework/config.py` (`SandboxSmtp`, `get_sandbox_smtp`), `.env.example` (the `SHP_TEST_SMTP_*` block), `README.md` (this sub-section and a change-log row).
 
+## Login API tests
+
+`tests/api/test_login_api.py` – endpoint `POST /api/v1/auth/web_login`, called directly with **Requests** (no browser). All tests carry the `api`, `authentication` and `regression` markers. Nothing is created, edited or deleted. Added 2026-11-12; **7 passed, 1 skipped** (the opt-in wrong-password test).
+
+| File | Role |
+|---|---|
+| `framework/api/login_api.py` | `LoginApi` – the reusable client. `login(payload)` sends the JSON payload exactly as given (so a field can be missing or empty); `login_with(email, password)` is the shortcut for a normal attempt; `message_of()` / `token_of()` read the answer. Logs the field **names** sent, the HTTP status and the message – never a value or the token. |
+| `test_data/login_api_data.json` | Test data: the expected messages, the unknown user, the wrong password, the empty and the missing-parameter payloads. The real credentials are **not** here; they still come from `.env`. |
+| `tests/api/test_login_api.py` | Fixtures `login_api` (client + one `requests.Session` for the module) and `valid_login` (one real sign-in shared by the positive tests), the helper `assert_login_rejected()` and the tests. Reuses `base_url` and `credentials` from `tests/conftest.py`. |
+
+| Test | Sends | Verifies | Extra markers |
+|---|---|---|---|
+| `test_valid_credentials_login_succeeds` | `.env` account | HTTP 200, `status` true, message "Login successful" | `smoke` |
+| `test_valid_login_returns_access_token` | (same answer) | `data.access_token` is a string with three dot-separated parts (JWT) | `smoke` |
+| `test_invalid_username_is_rejected` | an email that is not an SHP account | rejected with "Invalid email or password", no token | – |
+| `test_invalid_password_is_rejected` | `.env` email + wrong password | rejected with "Invalid email or password", no token. **Skipped unless run with `-m lockout_risk`** | `lockout_risk` |
+| `test_empty_username_and_password_are_rejected` | `email: ""`, `password: ""` | rejected with "Email and password are required", no token | – |
+| `test_missing_request_parameters_are_rejected[...]` | missing email / missing password / empty body `{}` | rejected with "Email and password are required", no token | – |
+
+"Rejected" (`assert_login_rejected`) means: HTTP 200, `status` false, the expected `message`, `data` is null and no token.
+
+Login API facts observed on 2026-11-12 (one request per case):
+
+- The API answers **HTTP 200 for every case**, including rejected logins; success or failure is in the JSON field `status`. Every answer has the shape `{"status", "message", "data", "errors"}`.
+- Success: `status: true`, `message: "Login successful"`, `data.access_token` (JWT) and `data.profile`. No cookie is set.
+- Unknown email: `status: false`, `"Invalid email or password"`, `data: null`.
+- Empty values, a missing field or an empty body: `status: false`, `"Email and password are required"`, `data: null`.
+- **Not observed:** the answer to a wrong password for an existing account. The expected message in the test ("Invalid email or password") is an assumption taken from the unknown-email answer; the test has never been run.
+
+**Lockout safety.** SHP may deactivate an account after 3 wrong passwords, so `test_invalid_password_is_rejected` is skipped in every normal run and runs only with `pytest tests/api -m lockout_risk` (one wrong-password attempt for the `.env` account per run). Whether a successful login resets the failed-attempt counter is unknown – do not run it repeatedly. Each normal run makes one real sign-in (`valid_login`).
+
 ## E2E tests
 
 `tests/integration/test_e2e_login_to_logout.py` – one happy-path journey, `test_user_journey_from_login_to_logout`, from the login page to sign-out in **one browser session**. Markers: `e2e`, `regression` and `destructive`. `destructive` is needed because the journey creates and deletes data, so CI runs it only in the single Chromium `data_writing` job. Run with `pytest tests/integration/test_e2e_login_to_logout.py` or `pytest -m e2e`. This is the first test in `tests/integration/` (see the growth rule).
@@ -1171,6 +1207,7 @@ Registered in `pytest.ini`. Strict mode is on, so an unregistered or misspelled 
 | `permissions` | Role and access-control rules |
 | `destructive` | Writes application data (create / edit / delete) and cleans it up again. CI runs these in **one chromium job only** (see [Continuous integration](#continuous-integration-github-actions)) |
 | `shared_state` | Changes a setting of the shared automation account (profile field, password, plan) and restores it. A subset of `destructive`; two of these must never run at the same time |
+| `lockout_risk` | Sends a wrong password for the real account (Login API test only). Skipped unless selected with `-m lockout_risk` |
 
 **Which tests carry them** (25 items of 363 are `destructive`, 9 of them `shared_state`):
 
@@ -1200,6 +1237,7 @@ Selection: `pytest -m "not destructive"` (nothing is written), `pytest -m destru
 | Video | `test-results/<test-folder>/video.webm` | Only with `--video retain-on-failure` |
 | Run log | `reports/pytest.log` | Every run |
 | JUnit XML report | `reports/junit.xml` | Every run (for CI) |
+| HTML report | `reports/api_report.html` (any path) | Only with `--html=<path> --self-contained-html` |
 | Terminal summary | console (`-ra`) | Every run: failed, errored and skipped tests with reasons |
 
 - `<test-folder>` is the slugified test id including the browser, e.g. `tests/ui/test_login.py::test_register_link_is_visible[firefox]` → `tests-ui-test-login-py-test-register-link-is-visible-firefox`.
@@ -1308,7 +1346,7 @@ Videos are kept in CI (`--video retain-on-failure`) on top of the screenshots an
 | D3 | Default run is headless Chromium; other browsers via `--browser` | Fast default; cross-browser on demand or in CI |
 | D4 | Native pytest logging configured in `pytest.ini` + result hooks in `tests/conftest.py` | No extra logging framework or module |
 | D5 | Native reporting only (terminal, JUnit XML, log file, artifacts) | No third-party reporting system until one is required and approved |
-| D6 | API tests will use **Playwright's built-in HTTP client** (`APIRequestContext`) | No extra dependency; can reuse the browser's authenticated session for UI → API checks. HTTPX only if a limitation is found |
+| D6 | API tests use **Requests** (changed 2026-11-12; the earlier plan was Playwright's `APIRequestContext`) | Requested for the Login API tests: the most widely known Python HTTP client, simple for learning, needs no browser |
 | D7 | Missing credentials cause an **error**, not a skip | CI must never pass silently because configuration is missing |
 | D8 | Project-local `.venv` with pinned direct dependencies | Reproducible, isolated from globally installed packages |
 | D9 | `--import-mode=importlib`, no `__init__.py` in test folders | Test files with the same name can exist in different layers |
@@ -1419,3 +1457,4 @@ My Profile functionality is complete (21/21 on Chromium, password restored). Out
 | 2026-09-23 | My Account → Email Templates **functional**: the Add Template modal, required-field validation for Name / Subject / Body (HTML), creating one `AUTO_EMAIL_TEMPLATE_<id>` template, Name search, Status filter, combined Name+Status filter (including the non-matching status), Reset, and delete through the row action and its confirmation. One template per run, deleted by the flow and again by the `template_cleanup` finalizer, which only ever deletes `AUTO_EMAIL_TEMPLATE_*` names and reports any leftover by name. Found: required-field validation is silent (no request, no error, no invalid state) and there is no success toast. Verified: 5/5 on Chromium, first run; the 11 visibility tests still pass and the account ended with 0 templates (see My Account → Email Templates tests). | Created: `tests/ui/test_email_templates_functional.py`. Modified: `framework/locators/email_templates_locators.py`, `framework/pages/email_templates_page.py`, `README.md` |
 | 2026-09-23 | My Account → SMTP Settings visibility: navigation through the My Account sub-menu (SMTP Settings stays the selected link), page header, Show entries control, the table, 6 column headers (S.No, SMTP Host, SMTP Port, SMTP Username, Status, Action) and the dynamic no-data state ("No SMTP settings yet"). Visibility only; nothing clicked beyond the sidebar, no SMTP created, tested or sent. Verified: 11/11 on Chromium against an empty list (see My Account → SMTP Settings tests). | Created: `framework/locators/smtp_settings_locators.py`, `framework/pages/smtp_settings_page.py`, `tests/ui/test_smtp_settings.py`. Modified: `README.md` |
 | 2026-09-23 | My Account → SMTP Settings **functional**: the Add SMTP Settings modal, required-field validation for SMTP host / Port / Username / Password / From email (each left empty once, plus the all-empty case), creating one `AUTO_SMTP_<id>` setting, editing it (host and From name, verified after a reload) and deleting it through the row action and its "Delete SMTP settings?" confirmation. One record per run, deleted by the flow and again by the `smtp_cleanup` finalizer, which only ever deletes rows carrying the `AUTO_SMTP_` username prefix and reports any leftover by name. SMTP values come from `SHP_TEST_SMTP_*` environment variables with fake `.test` defaults and a per-run random password; the password is never logged, printed or asserted on, no mail is sent and no mail server is contacted. Found: only a missing password is flagged (`is-invalid`, "Password is required.", Save disabled) – a missing host, port, username or From email is rejected silently; there is no success toast; the application does not verify the SMTP connection on save. Verified: 8/8 on Chromium, and 19/19 together with the 11 visibility tests, which still pass; the account ended with 0 SMTP settings (see My Account → SMTP Settings tests). | Created: `tests/ui/test_smtp_settings_functional.py`. Modified: `framework/locators/smtp_settings_locators.py`, `framework/pages/smtp_settings_page.py`, `framework/config.py`, `.env.example`, `README.md` |
+| 2026-11-12 | Login API tests: first API module, using Requests (decision D6 changed). Probed the live `POST /api/v1/auth/web_login` once per safe case (valid login, unknown email, empty values, missing fields) and wrote 8 test items from the real answers; the wrong-password test is opt-in (`-m lockout_risk`) and has never been run. Installed `pytest-html` 4.2.0 for the optional HTML report. Verified: 7 passed, 1 skipped; no token in `reports/`. No UI test or UI framework file was changed (see Login API tests). | Created: `framework/api/__init__.py`, `framework/api/login_api.py`, `test_data/login_api_data.json`, `tests/api/test_login_api.py`. Modified: `requirements.txt`, `pytest.ini`, `README.md` |

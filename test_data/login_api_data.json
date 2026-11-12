@@ -1,0 +1,21 @@
+{
+  "messages": {
+    "success": "Login successful",
+    "invalid_credentials": "Invalid email or password",
+    "required_fields": "Email and password are required"
+  },
+  "unknown_user": {
+    "email": "no-such-user.automation@example.com",
+    "password": "Dummy@12345"
+  },
+  "wrong_password": "Wrong@12345",
+  "empty_credentials": {
+    "email": "",
+    "password": ""
+  },
+  "missing_parameters": {
+    "missing email": {"password": "Dummy@12345"},
+    "missing password": {"email": "no-such-user.automation@example.com"},
+    "empty body": {}
+  }
+}
