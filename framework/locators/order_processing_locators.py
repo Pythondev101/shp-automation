@@ -15,6 +15,8 @@ from playwright.sync_api import Locator, Page
 PAGE_URL = re.compile(r"/order-logs/processing$")
 LIST_API_PATH = "/api/v1/order-logs/processing"
 """The request Search, Reset and the first load send for the table rows."""
+OPTIONS_API_PATH = "/api/v1/order-logs/options"
+"""The request that fills the Order Status options (``order_statuses``); answered separately from the table rows."""
 
 NO_RECORDS_MESSAGE = "No records found."
 

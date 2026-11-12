@@ -35,7 +35,7 @@ NEW_CASE_PRIORITY = "High"
 EDITED_PRIORITY = "Medium"
 ACTIVE_STATUS = "Active"
 INACTIVE_STATUS = "Inactive"
-CLOSED_STATUS = "Closed"
+CLOSED_POSITION = "Closed"
 CHAT_TEST_MESSAGE = "Automation test message"
 
 
@@ -402,16 +402,20 @@ def test_closed_case_chat_cannot_receive_replies(help_center: HelpCenterPage) ->
     locators = help_center.locators
     # Wait for the case list itself (a loading or empty-state row has no Case Id cell).
     expect(locators.column_cells("Case Id").first).to_be_visible()
-    closed_rows = locators.rows_with_status(CLOSED_STATUS)
+    # "Closed" is a Position (Pending / Open / Closed), set by SHP support; Status only reads Active / Inactive.
+    closed_rows = locators.rows_with_position(CLOSED_POSITION)
     if closed_rows.count() == 0:
-        pytest.skip("No case with Status 'Closed' on the first page of the Help Center list")
+        pytest.skip(
+            "No case with Position 'Closed' on the first page of the Help Center list; "
+            "only SHP support can close a case, so the automation cannot create one"
+        )
     row = closed_rows.first
     case_id = help_center.case_id_of(row)
+    expect(locators.chat_button(row)).to_be_enabled()
 
     # Chat is the application's own, enabled control; it opens the thread. Nothing is typed or sent.
     help_center.open_chat(row)
     expect(locators.chat_heading).to_contain_text(f"Case {case_id}")
-    expect(locators.chat_heading).to_contain_text(CLOSED_STATUS)
     expect(locators.chat_closed_notice).to_be_visible()
     expect(locators.chat_reply_input).to_have_count(0)
     expect(locators.chat_send_button).to_have_count(0)

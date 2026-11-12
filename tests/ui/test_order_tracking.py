@@ -138,7 +138,10 @@ def test_controls_stay_usable_when_table_is_empty(order_tracking: OrderTrackingP
 def test_order_status_filter(order_tracking: OrderTrackingPage) -> None:
     options = order_tracking.status_options()
     if not options:
-        pytest.skip("Order Status offers no status besides 'All'")
+        pytest.skip(
+            "Order Status has nothing to filter by: GET /api/v1/order-logs/options answered with an empty "
+            "order_statuses list (the account has no order logs), so the dropdown offers only 'All'"
+        )
     order_tracking.select_order_status(options[0])
     order_tracking.apply_filters()
 

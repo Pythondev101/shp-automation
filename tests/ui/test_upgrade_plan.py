@@ -29,6 +29,8 @@ pytestmark = pytest.mark.regression
 
 USAGE_UPDATE_TIMEOUT_S = 120
 """The checkout says new limits "take effect shortly after you confirm"."""
+NOT_INCLUDED = "Not included"
+"""What a plan card and its usage tile show for a module the plan does not offer."""
 
 
 @pytest.fixture
@@ -89,9 +91,12 @@ def test_every_rendered_plan_card_is_visible(upgrade_plan: UpgradePlanPage) -> N
 
 
 def _expected_limit(value: str | None) -> str | None:
-    """Pattern a usage tile must show for a card feature value; None when it is not comparable ("Not included")."""
+    """Pattern a usage tile must show for a card feature value; None when the card does not list the feature."""
     if value == "∞":
         return r"\bUnlimited\b"
+    if value == NOT_INCLUDED:
+        # A module the plan leaves out: the tile reads "Not included / Not available on your plan".
+        return rf"\b{NOT_INCLUDED}\b"
     if value and value.isdigit():
         return rf"/\s*{value}(?!\d)"
     return None
@@ -150,8 +155,9 @@ def test_downgrade_then_upgrade_back_to_the_original_plan(upgrade_plan: UpgradeP
 
     try:
         # Downgrade target: the nearest lower plan (cards render cheapest first) whose card lists
-        # a limit for every mapped usage module (so Current Usage can be compared, and no module
-        # the account uses is removed) and whose Plan Comparison checks all pass.
+        # every mapped usage module - as a number, ∞ or "Not included" - so Current Usage can be
+        # compared, and whose Plan Comparison checks all pass (the application's own check that
+        # the account fits the lower plan; a plan that fails it is closed and the next one tried).
         target = None
         for name in reversed(upgrade_plan.plan_names_with_action(DOWNGRADE_ACTION)):
             features = upgrade_plan.plan_features(name)
@@ -161,7 +167,10 @@ def test_downgrade_then_upgrade_back_to_the_original_plan(upgrade_plan: UpgradeP
                 target = name
                 break
         if target is None:
-            pytest.skip("No lower plan with comparable limits whose Plan Comparison checks all pass")
+            pytest.skip(
+                f"'{original}' cannot be downgraded: no lower plan passes the application's Plan Comparison "
+                "(the account's usage exceeds every lower plan, or it is already on the lowest plan)"
+            )
 
         problems = _wait_for_plan_and_usage(upgrade_plan, target, features)
         assert not problems, f"After downgrading to '{target}': {problems}"

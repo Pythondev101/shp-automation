@@ -5,9 +5,14 @@ from __future__ import annotations
 import logging
 from datetime import date
 
-from playwright.sync_api import Page, Response
+from playwright.sync_api import Locator, Page, Response
 
-from framework.locators.order_processing_locators import LIST_API_PATH, PAGE_URL, OrderProcessingLocators
+from framework.locators.order_processing_locators import (
+    LIST_API_PATH,
+    OPTIONS_API_PATH,
+    PAGE_URL,
+    OrderProcessingLocators,
+)
 from framework.pages.base_page import BasePage
 
 logger = logging.getLogger(__name__)
@@ -28,13 +33,22 @@ class OrderProcessingPage(BasePage):
         self.locators.sidebar_menu_button.wait_for()
         if not self.locators.sidebar_submenu.is_visible():
             self.click(self.locators.sidebar_menu_button, "'Order Logs' sidebar menu")
-        with self.page.expect_response(self._is_list_response) as response:
-            self.click(self.locators.order_processing_link, "'Order Processing' Order Logs sub-menu link")
-        self.last_list_response = response.value
+        self._open_link(self.locators.order_processing_link, "'Order Processing' Order Logs sub-menu link")
         self.page.wait_for_url(PAGE_URL)
 
+    def _open_link(self, link: Locator, description: str) -> None:
+        """Click a sub-menu link and wait for the table rows and the Order Status options it loads.
+
+        The options arrive in their own request; reading the dropdown before it answers finds only "All".
+        """
+        with self.page.expect_response(self._is_options_response), self.page.expect_response(
+            self._is_list_response
+        ) as response:
+            self.click(link, description)
+        self.last_list_response = response.value
+
     def status_options(self) -> list[str]:
-        """Labels of the Order Status dropdown except the default "All"; empty while SHP has no status."""
+        """Labels of the Order Status dropdown except the default "All"; empty while the server sends no status."""
         labels = [label.strip() for label in self.locators.order_status_select.locator("option").all_inner_texts()]
         return [label for label in labels if label != "All"]
 
@@ -58,6 +72,10 @@ class OrderProcessingPage(BasePage):
         with self.page.expect_response(self._is_list_response) as response:
             self.click(self.locators.reset_button, "Reset button")
         self.last_list_response = response.value
+
+    @staticmethod
+    def _is_options_response(response: Response) -> bool:
+        return OPTIONS_API_PATH in response.url and response.request.method == "GET"
 
     @staticmethod
     def _is_list_response(response: Response) -> bool:

@@ -18,9 +18,7 @@ class OrderTrackingPage(OrderProcessingPage):
         self.locators.sidebar_menu_button.wait_for()
         if not self.locators.sidebar_submenu.is_visible():
             self.click(self.locators.sidebar_menu_button, "'Order Logs' sidebar menu")
-        with self.page.expect_response(self._is_list_response) as response:
-            self.click(self.locators.order_tracking_link, "'Order Tracking' Order Logs sub-menu link")
-        self.last_list_response = response.value
+        self._open_link(self.locators.order_tracking_link, "'Order Tracking' Order Logs sub-menu link")
         self.page.wait_for_url(PAGE_URL)
 
     @staticmethod

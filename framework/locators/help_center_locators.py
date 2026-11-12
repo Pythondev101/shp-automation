@@ -140,6 +140,11 @@ class HelpCenterLocators:
         status_cell = self._page.locator(_cell_selector("Status"), has_text=re.compile(rf"^{re.escape(status)}$"))
         return self.case_rows.filter(has=status_cell)
 
+    def rows_with_position(self, position: str) -> Locator:
+        """The listed case rows whose Position cell (Pending / Open / Closed) reads exactly ``position``."""
+        cell = self._page.locator(_cell_selector("Position"), has_text=re.compile(rf"^{re.escape(position)}$"))
+        return self.case_rows.filter(has=cell)
+
     def cell(self, row: Locator, header: str) -> Locator:
         """The cell of ``row`` under column ``header``."""
         return row.locator(_cell_selector(header))
