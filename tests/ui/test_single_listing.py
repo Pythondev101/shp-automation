@@ -4,8 +4,8 @@ The page is reached through the sidebar "Listing" → "Common Listing" → "Crea
 "Single Listing" → "Manual" on the ``authenticated_page`` fixture ("Single Listing" only expands
 a sub-menu). No field is ever filled: the validation tests submit the empty form, and every API
 request that is not a GET is aborted (and fails the test), so no listing can be saved or sent
-live even if validation stopped working. Multi Listing, "Generate Listing By AI", image upload,
-category and policy logic are out of scope.
+live even if validation stopped working. Multi Listing, "Generate Listing By AI", a successful
+Save as Draft / Send to Live, image upload, category and policy logic are out of scope.
 """
 
 from __future__ import annotations
@@ -17,11 +17,15 @@ from playwright.sync_api import Page, expect
 
 from framework.locators.single_listing_locators import (
     CHECKBOXES,
+    DESCRIPTION_REQUIRED_MESSAGE,
     FIELDS,
+    IMAGES_REQUIRED_MESSAGE,
     PAGE_URL,
+    REQUIRED_MESSAGE,
     SECTIONS,
     Field,
     Section,
+    VALIDATION_TOAST,
 )
 from framework.pages.common_listing_page import CommonListingPage
 from framework.pages.single_listing_page import SingleListingPage
@@ -29,8 +33,8 @@ from framework.pages.single_listing_page import SingleListingPage
 pytestmark = pytest.mark.regression
 
 INVALID_CLASS = re.compile(r"(^|\s)is-invalid(\s|$)")
-REQUIRED_FIELDS = [field for field in FIELDS if field.required]
-OPTIONAL_FIELDS = [field for field in FIELDS if not field.required]
+EMPTY_FIELDS = [field for field in FIELDS if field.errors_when_empty]
+PREFILLED_OR_DISABLED_FIELDS = [field for field in FIELDS if not field.errors_when_empty]
 
 
 def _field_id(field: Field) -> str:
@@ -109,10 +113,7 @@ def test_field_is_visible(single_listing: SingleListingPage, field: Field) -> No
     locators = single_listing.locators
     expect(locators.field_label(field)).to_be_visible()
     expect(locators.field_control(field)).to_be_visible()
-    if field.required:
-        expect(locators.required_marker(field)).to_be_visible()
-    else:
-        expect(locators.required_marker(field)).to_have_count(0)
+    expect(locators.required_marker(field)).to_be_visible()
 
 
 @pytest.mark.smoke
@@ -121,6 +122,8 @@ def test_checkboxes_description_and_image_controls_are_visible(single_listing: S
     for label in CHECKBOXES:
         expect(locators.checkbox(label)).to_be_visible()
     expect(locators.add_specification_button).to_be_visible()
+    expect(locators.description_label).to_be_visible()
+    expect(locators.description_label.get_by_text("*", exact=True)).to_be_visible()
     expect(locators.description_format_select).to_be_visible()
     expect(locators.description_editor).to_be_visible()
     expect(locators.images_label).to_be_visible()
@@ -153,13 +156,22 @@ def test_empty_form_is_rejected(single_listing: SingleListingPage, action: str) 
     locators = single_listing.locators
     getattr(single_listing, action)()
 
-    for field in REQUIRED_FIELDS:
+    # Every empty mandatory field is marked invalid and carries its own message.
+    for field in EMPTY_FIELDS:
         expect(locators.required_message(field), f"{field.label}: no message").to_be_visible()
         expect(locators.field_control(field), f"{field.label}: not invalid").to_have_class(INVALID_CLASS)
+    expect(locators.description_required_message).to_be_visible()
     expect(locators.images_required_message).to_be_visible()
-    for field in OPTIONAL_FIELDS:
+    for field in PREFILLED_OR_DISABLED_FIELDS:
         expect(locators.required_message(field)).to_have_count(0)
         expect(locators.field_control(field), f"{field.label}: marked invalid").not_to_have_class(INVALID_CLASS)
+
+    # The toast lists the first three messages and counts the others.
+    messages = [REQUIRED_MESSAGE.format(label=field.label) for field in EMPTY_FIELDS]
+    messages += [IMAGES_REQUIRED_MESSAGE, DESCRIPTION_REQUIRED_MESSAGE]
+    expect(locators.validation_toast).to_have_text(
+        VALIDATION_TOAST.format(first_three=", ".join(messages[:3]), remaining=len(messages) - 3)
+    )
 
     # Still on the empty form, and nothing was sent to be saved or published.
     expect(single_listing.page).to_have_url(PAGE_URL)

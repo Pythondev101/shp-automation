@@ -9,6 +9,7 @@ from playwright.sync_api import Page, Response, Route
 
 from framework.locators.single_listing_locators import (
     API_URL_PATTERN,
+    CHECKBOXES,
     FORM_OPTIONS_API_PATH,
     PAGE_URL,
     SECTIONS,
@@ -52,8 +53,8 @@ class SingleListingPage(BasePage):
         index = SECTIONS.index(section)
         if index < len(SECTIONS) / 2:
             logger.info("Scroll to the bottom of the form")
-            # The action buttons stay on screen, so the last section's control is the scroll target.
-            self.locators.upload_from_storage_button.scroll_into_view_if_needed()
+            # The action buttons stay on screen, so the form's last control is the scroll target.
+            self.locators.checkbox(CHECKBOXES[-1]).scroll_into_view_if_needed()
         else:
             logger.info("Scroll to the top of the form")
             self.locators.page_heading.scroll_into_view_if_needed()
