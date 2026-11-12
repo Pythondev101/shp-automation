@@ -63,6 +63,10 @@ class CommonListingPage(BasePage):
         """Pick "Manual" in the open Single Listing sub-menu; it opens the Add New Listing page."""
         self.click(self.locators.manual_option, "'Manual' Single Listing option")
 
+    def choose_multi_listing(self) -> None:
+        """Pick "Multi Listing" in the open Create Listing menu; it opens the Add Draft page."""
+        self.click(self.locators.multi_listing_option, "'Multi Listing' Create Listing option")
+
     @staticmethod
     def option_labels(select: Locator) -> list[str]:
         """Labels of a filter dropdown except its first, default option ("All Channels" / "All")."""

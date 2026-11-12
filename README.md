@@ -880,6 +880,65 @@ Single Listing facts (first observed 2026-09-22, re-checked 2026-09-30; read-onl
 
 **Files:** created `framework/locators/single_listing_locators.py`, `framework/pages/single_listing_page.py`, `tests/ui/test_single_listing.py`. Modified: `framework/locators/common_listing_locators.py` (Create Listing menu and its two options), `framework/pages/common_listing_page.py` (`open_create_listing_menu`, `choose_single_listing`), `README.md` (this subsection and a change-log row).
 
+### Create Listing → Multi Listing (added 2026-11-12)
+
+`tests/ui/test_multi_listing.py` – the "Add Draft" page, `/multiple-listing/add` (page object `MultiListingPage`, locators `MultiListingLocators`). Run with `pytest tests/ui/test_multi_listing.py`. All tests carry `regression`, plus `smoke` or `functional`, and use `authenticated_page`.
+
+**Navigation:** sidebar Listing → Common Listing → **Create Listing → Multi Listing**. The page is titled **"Add Draft"** (breadcrumb Dashboard / Draft / Add Draft).
+
+**The page writes on load.** As soon as it opens – and again on its "Add Draft" button – the page sends `POST /api/v1/multiple-listing/create-blank`, which creates a blank draft row, and then reads it back with `GET /api/v1/multiple-listing/row/<id>`. The `multi_listing` fixture therefore aborts every non-GET `/api/` request **before** the page is opened (and records it), so the tests create **no draft and no listing**. Nothing is ever sent live.
+
+| # | Test | Verifies |
+|---|---|---|
+| 1 | `test_multi_listing_opens_add_draft_page` | **Navigation:** URL `/multiple-listing/add`, "Add Draft" heading, breadcrumb, its "Draft" link points to `/drafts` |
+| 2 | `test_page_controls_are_visible` | Add Draft (enabled), Send to Draft, Send to Live |
+| 3 | `test_nothing_can_be_sent_without_a_draft_row` | Empty state "No drafts yet. Click Add Draft below to start."; Send to Draft and Send to Live are **disabled**; URL unchanged; the only write the page attempted is `create-blank` |
+
+**Blocker (application defect, 2026-11-12): the draft row never renders.** The server answers `GET /api/v1/multiple-listing/row/<id>` with **HTTP 500** ("Internal Server Error") – both for a freshly created blank row and for an existing draft opened through Drafts → "Resume draft" (which lands on `/multiple-listing/edit` and shows the same empty "Add Draft" page). Because of this the page shows no field, dropdown, upload control or validation message, so these are **not covered and could not be inspected**: the row's fields and required markers, required-field validation, any file input / supported file format, a successful Send to Draft, and editing a draft. No field list was invented. The column list the page would render comes from `GET /api/v1/multiple-listing/columns` (Item Category, Image, Title, Subtitle, Custom Label (SKU), Listing Type, Listing Duration, Available Quantity, Start Price, …) but none of it is displayed. Re-inspect and extend these tests once the row request works.
+
+**Test data:** the tests create none. During the one-off inspection one blank row was created on purpose (`create-blank` allowed once) to see the form: **row id 832**. It is not listed on the Drafts page and the UI offers no way to delete it, so it **remains on the server** (1 leftover record; needs a developer / database clean-up).
+
+**Result:** Chromium, 2026-11-12: **3/3 passed**. Not run on Firefox or WebKit. No live listing was published.
+
+**Files:** created `framework/locators/multi_listing_locators.py`, `framework/pages/multi_listing_page.py`, `tests/ui/test_multi_listing.py`. Modified: `framework/pages/common_listing_page.py` (`choose_multi_listing`), `README.md`.
+
+### Drafts (added 2026-11-12)
+
+`tests/ui/test_drafts.py` – the Drafts page, `/drafts` (page object `DraftsPage`, locators `DraftsLocators`). Run with `pytest tests/ui/test_drafts.py`. All tests carry `regression`, plus `smoke` (navigation, visibility) or `functional`, and use `authenticated_page`.
+
+**Navigation:** the fixture sets a 2560×900 viewport, expands the "Listing" sidebar menu (only while collapsed), clicks **"Drafts"**, and waits for the table request `GET /api/v1/drafts`, the URL and the first body row.
+
+| # | Test | Verifies |
+|---|---|---|
+| 1 | `test_drafts_opens_from_listing_menu` | **Navigation:** Listing sub-menu expanded, URL `/drafts`, "Drafts" heading, Drafts link is the active one (`aria-current="page"`) |
+| 2 | `test_page_header_elements_are_visible` | Heading, breadcrumb, Help, the note "Drafts expire and are automatically deleted 60 days after the last updated date." |
+| 3 | `test_table_and_controls_are_visible` | Show entries, table, select-all checkbox; with rows also the "Showing x to y of z entries" summary, Previous and Next |
+| 4 | `test_page_has_no_search_or_filter_fields` | The page has **no** text input, Search or Reset (see below) |
+| 5–18 | `test_table_header_is_visible[<header>]` | S.No, Action, Photo, Title, Custom SKU, Listing Type, Duration, Start Price, Buy It Now, Shipping Cost, Quantity, Created Date, Updated Date, Expiration Date |
+| 19 | `test_table_shows_rows_or_empty_state` | Table request 2xx; either rows or the empty-state message "No drafts found." |
+| 20 | `test_help_opens_the_drafts_guide` | Help opens the "How Drafts work" dialog |
+| 21 | `test_show_entries_reloads_the_table` | Every Show entries option (read from the page; default chosen last): request carries `no_of_rows=<n>`, select shows it, valid state, rows ≤ n |
+| 22–30 | `test_sortable_column_sorts[<header>]` | The 9 sortable headers: three clicks go through ⇅ → ▲ → ▼ and back to the starting state; the column's values are only reordered; no other header is marked sorted. Skips with an empty table |
+| 31 | `test_selecting_a_row_shows_the_bulk_actions` | Ticking the first row shows "1 selected", Resume Drafts, Delete Drafts; Clear un-ticks it and hides them. Skips with an empty table |
+| 32 | `test_select_all_ticks_every_row` | Select-all ticks every row and shows "<rows> selected"; Clear un-ticks all. Skips with an empty table |
+
+**Search / filters / Reset: not applicable.** The current Drafts page has no search field, no filter and no Reset button – only Help, Show entries, sortable headers, row checkboxes and pagination. Test 4 asserts that, so it fails as a reminder to add filter tests once the application gets them. The existing list controls (Show entries, sorting, selection) are tested instead.
+
+**Dynamic data:** no row count, title, SKU, price or date is hardcoded; Show entries options are read from the page; row-dependent tests skip on an empty table. The empty-state text was confirmed once by answering the table request with an empty list inside the browser (inspection only; the tests do not mock).
+
+**Read-only.** Rows are only ticked and un-ticked. "Resume draft", "Resume Drafts" and "Delete Drafts" are never clicked, so no pre-existing draft is opened, edited or deleted.
+
+**Draft edit and delete: not covered (blocked).** They may only be exercised on an automation-owned draft, and none can be produced: a blank row from Multi Listing does not appear in Drafts, and the row editor that would fill and save it fails with HTTP 500 (see Multi Listing blocker). "Resume draft" on any draft hits the same 500. Delete exists in the UI only as the bulk "Delete Drafts" button; its confirmation and result are untested.
+
+Drafts facts observed on 2026-11-12 (read-only inspection):
+- The table has an **unnamed second column** holding the selection checkboxes. Sortable headers carry a glyph in their name (`Title⇅`), so headers are matched by name plus optional non-word characters.
+- Sorting is done in the browser and sends no request; Show entries sends `GET /api/v1/drafts?page_no=1&no_of_rows=<n>`. The page opens sorted by Updated Date (▼).
+- The account held 3 pre-existing drafts (all untouched).
+
+**Result:** Chromium, 2026-11-12: first run 31/32 – `test_sortable_column_sorts[Updated Date]` failed on test code (it assumed two sort states; the header cycles through three and Updated Date starts sorted). After the fix **32/32 passed**; both files together **35/35** in one run (2 min 43 s). Not run on Firefox or WebKit.
+
+**Files:** created `framework/locators/drafts_locators.py`, `framework/pages/drafts_page.py`, `tests/ui/test_drafts.py`. Modified: `README.md`.
+
 ## Setup → Import Setting tests
 
 `tests/ui/test_import_setting.py` – the Import Setting page, `/setup/import` (page object `ImportSettingPage`, locators `ImportSettingLocators`). Run with `pytest tests/ui/test_import_setting.py`. **Visibility only** – no filter, button, link or table behaviour is exercised. All 12 test items carry `regression` and `smoke` and use `authenticated_page`.
@@ -1458,3 +1517,4 @@ My Profile functionality is complete (21/21 on Chromium, password restored). Out
 | 2026-09-23 | My Account → SMTP Settings visibility: navigation through the My Account sub-menu (SMTP Settings stays the selected link), page header, Show entries control, the table, 6 column headers (S.No, SMTP Host, SMTP Port, SMTP Username, Status, Action) and the dynamic no-data state ("No SMTP settings yet"). Visibility only; nothing clicked beyond the sidebar, no SMTP created, tested or sent. Verified: 11/11 on Chromium against an empty list (see My Account → SMTP Settings tests). | Created: `framework/locators/smtp_settings_locators.py`, `framework/pages/smtp_settings_page.py`, `tests/ui/test_smtp_settings.py`. Modified: `README.md` |
 | 2026-09-23 | My Account → SMTP Settings **functional**: the Add SMTP Settings modal, required-field validation for SMTP host / Port / Username / Password / From email (each left empty once, plus the all-empty case), creating one `AUTO_SMTP_<id>` setting, editing it (host and From name, verified after a reload) and deleting it through the row action and its "Delete SMTP settings?" confirmation. One record per run, deleted by the flow and again by the `smtp_cleanup` finalizer, which only ever deletes rows carrying the `AUTO_SMTP_` username prefix and reports any leftover by name. SMTP values come from `SHP_TEST_SMTP_*` environment variables with fake `.test` defaults and a per-run random password; the password is never logged, printed or asserted on, no mail is sent and no mail server is contacted. Found: only a missing password is flagged (`is-invalid`, "Password is required.", Save disabled) – a missing host, port, username or From email is rejected silently; there is no success toast; the application does not verify the SMTP connection on save. Verified: 8/8 on Chromium, and 19/19 together with the 11 visibility tests, which still pass; the account ended with 0 SMTP settings (see My Account → SMTP Settings tests). | Created: `tests/ui/test_smtp_settings_functional.py`. Modified: `framework/locators/smtp_settings_locators.py`, `framework/pages/smtp_settings_page.py`, `framework/config.py`, `.env.example`, `README.md` |
 | 2026-11-12 | Login API tests: first API module, using Requests (decision D6 changed). Probed the live `POST /api/v1/auth/web_login` once per safe case (valid login, unknown email, empty values, missing fields) and wrote 8 test items from the real answers; the wrong-password test is opt-in (`-m lockout_risk`) and has never been run. Installed `pytest-html` 4.2.0 for the optional HTML report. Verified: 7 passed, 1 skipped; no token in `reports/`. No UI test or UI framework file was changed (see Login API tests). | Created: `framework/api/__init__.py`, `framework/api/login_api.py`, `test_data/login_api_data.json`, `tests/api/test_login_api.py`. Modified: `requirements.txt`, `pytest.ini`, `README.md` |
+| 2026-11-12 | Listing → Create Listing → Multi Listing and Listing → Drafts. Multi Listing ("Add Draft", `/multiple-listing/add`): navigation, page controls, and Send to Draft / Send to Live disabled without a draft row; all writes blocked, nothing created or published. Drafts (`/drafts`): navigation, header, 14 column headers, rows-or-empty state, Help, Show entries, sorting (9 columns), row selection and bulk-action bar; read-only. **Blocker:** `GET /api/v1/multiple-listing/row/<id>` answers HTTP 500, so the draft row's fields, required validation, file input, draft edit and draft delete could not be inspected or tested; Drafts has no search/filter/Reset. One blank row (id 832) created during inspection remains on the server. Verified: 35/35 on Chromium (see Create Listing → Multi Listing and Drafts). | Created: `framework/locators/multi_listing_locators.py`, `framework/pages/multi_listing_page.py`, `tests/ui/test_multi_listing.py`, `framework/locators/drafts_locators.py`, `framework/pages/drafts_page.py`, `tests/ui/test_drafts.py`. Modified: `framework/pages/common_listing_page.py`, `README.md` |
